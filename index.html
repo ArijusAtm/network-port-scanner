@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Network Port Scanner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0e1a;
+      --surface:  #111827;
+      --border:   #1e2d40;
+      --accent:   #00c3ff;
+      --accent2:  #0066ff;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --high:     #ef4444;
+      --medium:   #f59e0b;
+      --low:      #3b82f6;
+      --safe:     #10b981;
+      --unknown:  #8b5cf6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
+    }
+
+    .header p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── SCAN BOX ── */
+    .scan-box {
+      max-width: 640px;
+      margin: 0 auto 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.8rem;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      font-family: 'Consolas', monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    input::placeholder { color: var(--muted); }
+
+    .btn-scan {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn-scan:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-scan:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .disclaimer {
+      margin-top: 0.8rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* ── PROGRESS ── */
+    .progress-wrap {
+      display: none;
+      margin-top: 1.2rem;
+    }
+
+    .progress-bar {
+      background: var(--border);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 999px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-family: 'Consolas', monospace;
+    }
+
+    /* ── RESULTS ── */
+    #results { max-width: 900px; margin: 0 auto; display: none; }
+
+    /* Summary cards */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .stat-card .num {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-card .label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .num.high    { color: var(--high); }
+    .num.medium  { color: var(--medium); }
+    .num.low     { color: var(--low); }
+    .num.safe    { color: var(--safe); }
+    .num.accent  { color: var(--accent); }
+
+    /* Host info bar */
+    .host-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.4rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      font-family: 'Consolas', monospace;
+    }
+
+    .host-bar span { color: var(--muted); }
+    .host-bar strong { color: var(--accent); }
+
+    /* Port table */
+    .ports-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .ports-header {
+      padding: 1rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .port-row {
+      display: grid;
+      grid-template-columns: 80px 120px 1fr 90px;
+      gap: 1rem;
+      padding: 0.9rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
+      font-size: 0.88rem;
+      transition: background 0.15s;
+    }
+
+    .port-row:last-child { border-bottom: none; }
+    .port-row:hover { background: rgba(255,255,255,0.03); }
+
+    .port-num {
+      font-family: 'Consolas', monospace;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .port-name { font-weight: 600; color: var(--text); }
+
+    .port-desc { color: var(--muted); line-height: 1.5; font-size: 0.83rem; }
+
+    .risk-badge {
+      display: inline-block;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 0.2rem 0.7rem;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .risk-high    { background: rgba(239,68,68,0.15);  color: var(--high);    border: 1px solid rgba(239,68,68,0.3); }
+    .risk-medium  { background: rgba(245,158,11,0.15); color: var(--medium);  border: 1px solid rgba(245,158,11,0.3); }
+    .risk-low     { background: rgba(59,130,246,0.15); color: var(--low);     border: 1px solid rgba(59,130,246,0.3); }
+    .risk-safe    { background: rgba(16,185,129,0.15); color: var(--safe);    border: 1px solid rgba(16,185,129,0.3); }
+    .risk-unknown { background: rgba(139,92,246,0.15); color: var(--unknown); border: 1px solid rgba(139,92,246,0.3); }
+
+    /* No ports message */
+    .no-ports {
+      padding: 2.5rem;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .no-ports .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+    /* Error */
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px;
+      color: var(--high);
+      padding: 1rem 1.4rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    @media (max-width: 600px) {
+      .port-row { grid-template-columns: 70px 100px 1fr; }
+      .port-row .risk-badge { display: none; }
+      .input-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ Network Port Scanner</h1>
+  <p>Scan a host for open ports and identify potential security risks</p>
+</div>
+
+<div class="scan-box">
+  <div class="input-row">
+    <input type="text" id="hostInput" placeholder="Enter hostname or IP (e.g. scanme.nmap.org)" />
+    <button class="btn-scan" id="scanBtn" onclick="startScan()">Scan</button>
+  </div>
+  <p class="disclaimer">⚠ Only scan hosts you own or have explicit permission to scan.</p>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">Initialising scanner…</div>
+  </div>
+</div>
+
+<div id="results"></div>
+
+<footer>
+  Network Port Scanner — built by ArijusAtm &nbsp;|&nbsp; Educational tool — use responsibly
+</footer>
+
+<script>
+  let progressInterval = null;
+
+  function startScan() {
+    const host = document.getElementById("hostInput").value.trim();
+    if (!host) { alert("Please enter a hostname or IP address."); return; }
+
+    const btn = document.getElementById("scanBtn");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressFill = document.getElementById("progressFill");
+    const progressLabel = document.getElementById("progressLabel");
+    const results = document.getElementById("results");
+
+    // Reset UI
+    btn.disabled = true;
+    btn.textContent = "Scanning…";
+    results.style.display = "none";
+    results.innerHTML = "";
+    progressWrap.style.display = "block";
+    progressFill.style.width = "0%";
+
+    // Animated progress bar (visual feedback while waiting)
+    const messages = [
+      "Resolving hostname…",
+      "Connecting to target…",
+      "Probing common ports…",
+      "Checking service banners…",
+      "Analysing risk levels…",
+      "Compiling results…"
+    ];
+    let pct = 0;
+    let msgIdx = 0;
+
+    progressInterval = setInterval(() => {
+      pct = Math.min(pct + Math.random() * 8 + 2, 90);
+      progressFill.style.width = pct + "%";
+      if (msgIdx < messages.length) {
+        progressLabel.textContent = messages[msgIdx++];
+      }
+    }, 700);
+
+    // Call the Python backend
+    fetch(`/scan?host=${encodeURIComponent(host)}`)
+      .then(r => r.json())
+      .then(data => {
+        clearInterval(progressInterval);
+        progressFill.style.width = "100%";
+        progressLabel.textContent = "Scan complete.";
+        setTimeout(() => {
+          progressWrap.style.display = "none";
+          renderResults(data);
+        }, 500);
+      })
+      .catch(() => {
+        clearInterval(progressInterval);
+        progressWrap.style.display = "none";
+        results.style.display = "block";
+        results.innerHTML = `<div class="error-box">❌ Could not connect to scanner. Make sure scanner.py is running.</div>`;
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = "Scan";
+      });
+  }
+
+  function renderResults(data) {
+    const results = document.getElementById("results");
+    results.style.display = "block";
+
+    if (data.error) {
+      results.innerHTML = `<div class="error-box">❌ ${data.error}</div>`;
+      return;
+    }
+
+    const rc = data.risk_counts || {};
+
+    let portsHTML = "";
+    if (data.ports.length === 0) {
+      portsHTML = `<div class="no-ports"><div class="icon">🛡️</div><div>No open ports found on scanned range.</div></div>`;
+    } else {
+      portsHTML = data.ports.map(p => `
+        <div class="port-row">
+          <span class="port-num">${p.port}</span>
+          <span class="port-name">${p.name}</span>
+          <span class="port-desc">${p.desc}</span>
+          <span class="risk-badge risk-${p.risk}">${p.risk}</span>
+        </div>
+      `).join("");
+    }
+
+    results.innerHTML = `
+      <div class="host-bar">
+        <div><span>Host: </span><strong>${data.host}</strong></div>
+        <div><span>IP: </span><strong>${data.ip}</strong></div>
+        <div><span>Ports scanned: </span><strong>${data.total_scanned}</strong></div>
+        <div><span>Open ports: </span><strong>${data.open_count}</strong></div>
+      </div>
+
+      <div class="summary">
+        <div class="stat-card"><div class="num accent">${data.open_count}</div><div class="label">Open Ports</div></div>
+        <div class="stat-card"><div class="num high">${rc.high || 0}</div><div class="label">High Risk</div></div>
+        <div class="stat-card"><div class="num medium">${rc.medium || 0}</div><div class="label">Medium Risk</div></div>
+        <div class="stat-card"><div class="num low">${rc.low || 0}</div><div class="label">Low Risk</div></div>
+        <div class="stat-card"><div class="num safe">${rc.safe || 0}</div><div class="label">Safe</div></div>
+      </div>
+
+      <div class="ports-wrap">
+        <div class="ports-header">Scan Results — Open Ports</div>
+        ${portsHTML}
+      </div>
+    `;
+  }
+
+  // Allow pressing Enter to scan
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("hostInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") startScan();
+    });
+  });
+</script>
+
+</body>
+</html>
